@@ -1,0 +1,289 @@
+#! /usr/bin/python
+# -*- coding: utf-8 -*-
+
+# Copyright 2018 Pascal COMBES <pascom@orange.fr>
+#
+# This file is part of qtcreator-depetree.
+#
+# qtcreator-depetree is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# qtcreator-depetree is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with qtcreator-depetree. If not, see <http://www.gnu.org/licenses/>
+
+"""
+Parses Qt Creator lib/plugin tree an generates spec files with minimal dependencies
+for devel and non-devel RPM packages.
+
+@author: pascal COMBES <pascom@orange.fr>
+"""
+from __future__ import print_function
+
+from enum import Enum
+import os
+import sys
+import argparse
+import subprocess
+import zypp
+
+from deptree import SourceTreeParser
+
+class SpecFile:
+    def __init__(self, tree, specFileInput=None, specFileOutput=None, devel=False):
+        self.depTree = tree
+        self.specFileInput = specFileInput
+        self.specFileOutput = specFileOutput
+        self.devel = devel
+
+        if self.devel:
+            self.defaults = ['qtcreator-devel.spec.in', 'qt-creator-devel.spec.in']
+        else:
+            self.defaults = ['qtcreator.spec.in', 'qt-creator.spec.in']
+
+    def generate(self):
+        if not self.__resolve():
+            return
+
+        with open(self.specFileInput, 'r') as inFile, open(self.specFileOutput, 'w') as outFile:
+            for line in inFile:
+                if (line.strip() == '##SUBPACKAGES:desc##'):
+                    print("# Auto-generated metadata of subpackages", file=outFile)
+                    print("", file=outFile)
+                    if self.devel:
+                        self.depTree.printDevelMetadata(True, False, outFile)
+                        self.depTree.printDevelMetadata(False, True, outFile)
+                    else:
+                        self.depTree.printMetadata(True, False, outFile)
+                        self.depTree.printMetadata(False, True, outFile)
+                    print("# End of auto-generated metadata of subpackages", file=outFile)
+                elif (line.strip() == '##SUBPACKAGES:files##'):
+                    print("# Auto-generated file list of subpackages", file=outFile)
+                    print("", file=outFile)
+                    if self.devel:
+                        self.depTree.printDevelFiles(True, False, outFile)
+                        self.depTree.printDevelFiles(False, True, outFile)
+                    else:
+                        self.depTree.printFiles(True, False, outFile)
+                        self.depTree.printFiles(False, True, outFile)
+                    print("# End of auto-generated file list of subpackages", file=outFile)
+                else:
+                    outFile.write(line)
+
+    def __resolve(self):
+        # Default values for template spec file
+        if (self.specFileInput is None):
+            for name in self.defaults:
+                if os.path.isfile(name):
+                    self.specFileInput = name
+                    break
+        elif os.path.isdir(self.specFileInput):
+            for name in self.defaults:
+                if os.path.isfile(os.path.join(self.specFileInput, name)):
+                    self.specFileInput = os.path.join(specFileInput, name)
+        assert (self.specFileInput is None) or os.path.isfile(self.specFileInput)
+
+        # Default value for output spec file
+        if (self.specFileOutput is None) and (self.specFileInput is not None):
+            (path, self.specFileOutput) = os.path.split(self.specFileInput)
+            dot = self.specFileOutput.find('.')
+            if (dot != -1):
+                self.specFileOutput =  self.specFileOutput[0:dot]
+            self.specFileOutput = os.path.join(path, self.specFileOutput + '.spec')
+
+        # Make a backup
+        if (self.specFileOutput is not None) and os.path.exists(self.specFileOutput):
+            os.rename(self.specFileOutput, self.specFileOutput + '.old')
+
+        return (self.specFileInput is not None)
+
+class Repository:
+    class InfoType(Enum):
+        """
+        Informations:
+            -Summary for RPM summary
+            -Description for RPM description
+        """
+        Summary = 1
+        Description = 2
+
+    def __init__(self, alias):
+        factory = zypp.ZYppFactory.instance()
+        zypper = factory.getZYpp()
+        self.pool = zypper.pool()
+
+        manager = zypp.RepoManager()
+        repo = manager.getRepo(alias)
+        manager.loadFromCache(repo)
+
+    def printSummary(self, pkgName, default='# TODO', file=None):
+        return self.printInfo(self.__class__.InfoType.Summary, pkgName, default, file=file)
+
+    def printDescription(self, pkgName, default='# TODO', file=None):
+        return self.printInfo(self.__class__.InfoType.Description, pkgName, default, file=file)
+
+    def printInfo(self, infoType, pkgName, default='# TODO', file=None):
+        if not pkgName.startswith("qtcreator-"):
+            pkgName = "qtcreator-" + pkgName
+
+        try:
+            pkg = self.pool.byNameIterator(pkgName).value()
+            if infoType is self.__class__.InfoType.Summary:
+                print(pkg.summary(), file=file)
+            if infoType is self.__class__.InfoType.Description:
+                print(pkg.description(), file=file)
+        except StopIteration as e:
+            self.printInfoFromRPM(infoType, pkgName, default, file=file)
+
+    def printInfoFromRPM(self, infoType, pkgName, default='# TODO', file=None):
+        if not pkgName.startswith("qtcreator-"):
+            pkgName = "qtcreator-" + pkgName
+
+        if infoType is self.__class__.InfoType.Summary:
+            fmt = "%{{Summary}}"
+        if infoType is self.__class__.InfoType.Description:
+            fmt = "%{{Description}}"
+
+        rpm = subprocess.Popen(["rpm", "-q", "--qf", fmt, pkgName], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if not rpm.wait() == 0:
+            print(default, file=file)
+        else:
+            print(rpm.stdout.read().decode().strip(), file=file)
+
+if __name__ == "__main__":
+    knownExts = ["ps", "pdf", "svg", "svgz", "fig", "png", "gif"]
+
+    # Command line argument parsing
+    argParser = argparse.ArgumentParser(
+        description="""Parses dependencies in a Qt Creator source tree,
+and generates spec files with minimal dependencies
+for devel and non-devel RPM packages.""",
+        epilog="""License: GPL v3, see <http://www.gnu.org/licenses/>
+Copyright (c) 2018 Pascal COMBES <pascom@orange.fr>""",
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    argParser.add_argument(
+        "--root", "-r", 
+        required=False, 
+        default=".", 
+        dest="inputPath", 
+        help="The root of the Qt Creator source tree to analyse (defaults to '.')"
+    )
+    argParser.add_argument(
+        "--no-libs",
+        action="store_const",
+        dest="outputLibs",
+        default=True,
+        const=False,
+        help="Does not output library dependencies"
+    )
+    argParser.add_argument(
+        "--no-plugins",
+        action="store_const",
+        dest="outputPlugins",
+        default=True,
+        const=False,
+        help="Does not output plugin dependencies"
+    )
+    argParser.add_argument(
+        "--repo-alias", "-a",
+        required=False,
+        default="repo-perso",
+        dest="repository",
+        help="Repository from which to fetch information from"
+    )
+    argParser.add_argument(
+        "--no-optimize",
+        action="store_const",
+        dest="optimize",
+        default=True,
+        const=False,
+        help="Whether to remove transitive dependencies (dependencies implied by other dependencies)"
+    )
+    argParser.add_argument(
+        "--spec-file-in",
+        required=False,
+        default=None,
+        dest="specFileInput",
+        help="Template RPM spec file path for non devel package (by default searches for \"qtcreator.spec.in\" and \"qt-creator.spec.in\")"
+    )
+    argParser.add_argument(
+        "--spec-file-out",
+        required=False,
+        default=None,
+        dest="specFileOutput",
+        help="RPM spec file output path for non devel package (defaults to basename of corresponding input file with spec extension)"
+    )
+    argParser.add_argument(
+        "--devel-spec-file-in",
+        required=False,
+        default=None,
+        dest="specFileDevelInput",
+        help="Template RPM spec file path for devel package (by default searches for \"qtcreator-devel.spec.in\" and \"qt-creator-devel.spec.in\")"
+    )
+    argParser.add_argument(
+        "--devel-spec-file-out",
+        required=False,
+        default=None,
+        dest="specFileDevelOutput",
+        help="RPM spec file output path for devel package (defaults to basename of corresponding input file with spec extension)"
+    )
+    argParser.add_argument(
+        "--select", "-s",
+        required=False,
+        default='',
+        dest="enabledDeps",
+        help="Selects only these dependencies (comma-separated list)"
+    )
+    argParser.add_argument(
+        "--deselect", "-d",
+        required=False,
+        default='',
+        dest="disabledDeps",
+        help="Deselects only these dependencies (comma-separated list)"
+    )
+    args = argParser.parse_args()
+    
+    # Check that it is Qt creator root
+    if not os.path.exists(os.path.join(args.inputPath, "qtcreator.pro")):
+        print("The path {} is not a Qt Creator root (missing qtcreator.pro)".format(os.path.abspath(args.inputPath)), file=sys.stderr)
+        exit(1)        
+
+    # Parse Qt Creator tree
+    qtcTree = SourceTreeParser(args.inputPath)
+    qtcTree.repo = Repository(args.repository)
+    qtcTree.selected = [d for d in args.enabledDeps.split(',') if len(d) > 0]
+    qtcTree.unselected = [d for d in args.disabledDeps.split(',') if len(d) > 0]
+    qtcTree.parse(args.optimize)
+
+    # Customizations
+    qtcTree.requires['qbsprojectmanager'] = ["qtcreator-qbs = %{version}"]
+    qtcTree.files['qmldesigner'] = ["%{_libdir}/qtcreator/plugins/qmldesigner"]
+    qtcTree.develFiles['utils'] = [
+        "%dir %{_includedir}/qtcreator/src/libs/3rdparty",
+        "%{_includedir}/qtcreator/src/libs/3rdparty/optional",
+        "%{_includedir}/qtcreator/src/libs/3rdparty/variant"
+    ]
+    qtcTree.develFiles['cplusplus'] = [
+        "%dir %{_includedir}/qtcreator/src/libs/3rdparty",
+        "%{_includedir}/qtcreator/src/libs/3rdparty/cplusplus"
+    ]
+    qtcTree.develFiles['sqlite'] = [
+        "%dir %{_includedir}/qtcreator/src/libs/3rdparty",
+        "%{_includedir}/qtcreator/src/libs/3rdparty/sqlite"
+    ]
+
+
+    # Spec file generation
+    specFile = SpecFile(qtcTree, args.specFileInput, args.specFileOutput)
+    specFile.generate()
+
+    develSpecFile = SpecFile(qtcTree, args.specFileDevelInput, args.specFileDevelOutput, True)
+    develSpecFile.generate()
+    
+    exit(0)

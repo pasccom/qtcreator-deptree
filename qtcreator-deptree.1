@@ -1,0 +1,72 @@
+.TH qtcreator-deptree 1
+.SH NAME
+qtcreator-deptree \- Output a minimal dependency tree for Qt Creator.
+.SH SYNOPSIS
+qtcreator-deptree [OPTIONS] outputFile
+
+.SH DESCRIPTION
+\fBqtcreator-deptree\fR is a Python script which parses dependencies in a Qt Creator source tree,
+simplifies the tree and outputs it as a dot diagram
+
+.SH ARGUMENTS
+.TP
+.BR outputFile\fR\ (mandatory)
+The name of the output file for the dependency tree.
+
+.SH OPTIONS
+.TP
+.IR -h
+Displays this help and exit.
+.TP
+.IR -r|--root\fR\ \fBinputPath\fR
+The root of the Qt Creator source tree to analyse (defaults to '.')
+.TP
+.IR -t|--type\fR\ {\fBps\fR, \fBpdf\fR, \fBsvg\fR, \fBsvgz\fR, \fBfig\fR, \fBpng\fR, \fBgif\fR}
+The format of the output file for the dependency tree.
+.TP
+.IR --no-libs
+Does not output library dependencies.
+.TP
+.IR --no-plugins
+Does not output plugin dependencies.
+.TP
+.IR -a|--repo-alias\fR\ \fBrepository\fR
+Repository from which to fetch information (defaults to \fIrepo-perso\fR).
+.TP
+.IR --no-optimize
+Whether to remove transitive dependencies (dependencies implied by other dependencies)
+.TP
+.IR --transitive
+Whether to output transitive dependencies (dependencies implied by other dependencies) with dashed lines
+.TP
+.IR -s|--select\fR\ \fBenabledDeps\fR
+Selects only these dependencies (comma-separated list)
+.TP
+.IR -d|--deselect\fR\ \fBdisabledDeps\fR
+Deselects only these dependencies (comma-separated list)
+
+.SH AUTHOR
+The script and the man page were written by \fBPascal COMBES\fR <\fIpascom@orange.fr\fR>
+
+.SH COPYRIGHT
+\fBqtcreator-deptree\fR is copyright 2018 \fBPascal COMBES\fR <\fIpascom@orange.fr\fR>.
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation files
+(the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of the Software,
+and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT.  IN NO EVENT SHALL SIMON TATHAM BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

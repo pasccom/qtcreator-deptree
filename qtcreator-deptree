@@ -1,0 +1,144 @@
+#! /usr/bin/python
+# -*- coding: utf-8 -*-
+
+# Copyright 2018 Pascal COMBES <pascom@orange.fr>
+#
+# This file is part of qtcreator-deptree.
+#
+# qtcreator-deptree is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# qtcreator-deptree is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with qtcreator-deptree. If not, see <http://www.gnu.org/licenses/>
+
+"""
+Parses Qt Creator lib/plugin tree an generates a minimal dependency tree
+
+@author: pascal COMBES <pascom@orange.fr>
+"""
+from __future__ import print_function
+
+from enum import Enum
+import re
+import os
+import sys
+import argparse
+
+from deptree import SourceTreeParser
+
+
+if __name__ == "__main__":
+    knownExts = ["ps", "pdf", "svg", "svgz", "fig", "png", "gif"]
+
+    # Command line argument parsing
+    argParser = argparse.ArgumentParser(
+        description="""Parses dependencies in a Qt Creator source tree,
+simplifies the tree and output it as a dot diagram""",
+        epilog="""License: GPL v3, see <http://www.gnu.org/licenses/>
+Copyright (c) 2018 Pascal COMBES <pascom@orange.fr>""",
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    argParser.add_argument(
+        "outputFile", 
+        help="The name of the output file"
+    )
+    argParser.add_argument(
+        "--root", "-r", 
+        required=False, 
+        default=".", 
+        dest="inputPath", 
+        help="The root of the Qt Creator source tree to analyse (defaults to '.')"
+    )
+    argParser.add_argument(
+        "--type", "-t", 
+        required=False, 
+        dest="ext", 
+        choices=knownExts, 
+        help="The format of the output"
+    )
+    argParser.add_argument(
+        "--no-libs",
+        action="store_const",
+        dest="outputLibs",
+        default=True,
+        const=False,
+        help="Does not output library dependencies"
+    )
+    argParser.add_argument(
+        "--no-plugins",
+        action="store_const",
+        dest="outputPlugins",
+        default=True,
+        const=False,
+        help="Does not output plugin dependencies"
+    )
+    argParser.add_argument(
+        "--no-optimize",
+        action="store_const",
+        dest="optimize",
+        default=True,
+        const=False,
+        help="Whether to remove transitive dependencies (dependencies implied by other dependencies)"
+    )
+    argParser.add_argument(
+        "--transitive",
+        action="store_const",
+        dest="transitive",
+        default=False,
+        const=True,
+        help="Whether to output transitive dependencies (dependencies implied by other dependencies) with dashed lines"
+    )
+    argParser.add_argument(
+        "--select", "-s",
+        required=False,
+        default='',
+        dest="enabledDeps",
+        help="Selects only these dependencies (comma-separated list)"
+    )
+    argParser.add_argument(
+        "--deselect", "-d",
+        required=False,
+        default='',
+        dest="disabledDeps",
+        help="Deselects only these dependencies (comma-separated list)"
+    )
+    args = argParser.parse_args()
+    
+    # Check that it is Qt creator root
+    if not os.path.exists(os.path.join(args.inputPath, "qtcreator.pro")):
+        print("The path {} is not a Qt Creator root (missing qtcreator.pro)".format(os.path.abspath(args.inputPath)), file=sys.stderr)
+        exit(1)        
+    # Ensure ext is set and check it
+    basename, ext = os.path.splitext(args.outputFile)
+    if args.ext:
+        ext = args.ext
+    else:
+        ext = ext[1:]
+    if ext not in knownExts:
+        print("The given extension \"{}\" is unknown".format(ext))
+        exit(2)
+    
+    # Parse Qt Creator tree
+    qtcTree = SourceTreeParser(args.inputPath)
+    qtcTree.selected = [d for d in args.enabledDeps.split(',') if len(d) > 0]
+    qtcTree.unselected = [d for d in args.disabledDeps.split(',') if len(d) > 0]
+    qtcTree.parse(args.optimize or args.transitive)
+    
+    # Tree diagram output
+    #qtcTree.listDepLibraries(outputLibs=args.outputLibs, outputPlugins=args.outputPlugins)
+    qtcTree.outputDot(basename + ".dot", outputLibs=args.outputLibs, outputPlugins=args.outputPlugins, outputAllDeps=args.transitive)
+    if ext == "pdf":
+        os.system("dot -Tps {}.dot > {}.ps.tmp".format(basename, basename))
+        os.system("sed -i -e '4 a %%BoundingBox: (atend)' {}.ps.tmp".format(basename))
+        os.system("epstopdf --outfile={} {}.ps.tmp".format(args.outputFile, basename))
+        os.system("rm {}.ps.tmp".format(basename))
+    else:
+        os.system("dot -T{} {}.dot > {}".format(ext, basename, args.outputFile))
+    
+    exit(0)
