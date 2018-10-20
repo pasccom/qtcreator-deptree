@@ -31,7 +31,12 @@ import os
 import sys
 import argparse
 import subprocess
-import zypp
+try:
+    import zypp
+except ImportError:
+    zypp = None
+    print("\033[1;33;40mWarning:\033[0m Your system does not have libZypp bindings for Python.")
+    print("Package info will be retrieved only from installed RPM.")
 
 from deptree import SourceTreeParser
 
@@ -114,13 +119,16 @@ class Repository:
         Description = 2
 
     def __init__(self, alias):
-        factory = zypp.ZYppFactory.instance()
-        zypper = factory.getZYpp()
-        self.pool = zypper.pool()
+        self.pool = None
 
-        manager = zypp.RepoManager()
-        repo = manager.getRepo(alias)
-        manager.loadFromCache(repo)
+        if zypp is not None:
+            factory = zypp.ZYppFactory.instance()
+            zypper = factory.getZYpp()
+            self.pool = zypper.pool()
+
+            manager = zypp.RepoManager()
+            repo = manager.getRepo(alias)
+            manager.loadFromCache(repo)
 
     def printSummary(self, pkgName, default='# TODO', file=None):
         return self.printInfo(self.__class__.InfoType.Summary, pkgName, default, file=file)
@@ -133,12 +141,14 @@ class Repository:
             pkgName = "qtcreator-" + pkgName
 
         try:
+            if self.pool is None:
+                raise StopIteration()
             pkg = self.pool.byNameIterator(pkgName).value()
             if infoType is self.__class__.InfoType.Summary:
                 print(pkg.summary(), file=file)
             if infoType is self.__class__.InfoType.Description:
                 print(pkg.description(), file=file)
-        except StopIteration as e:
+        except StopIteration:
             self.printInfoFromRPM(infoType, pkgName, default, file=file)
 
     def printInfoFromRPM(self, infoType, pkgName, default='# TODO', file=None):
