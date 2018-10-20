@@ -156,9 +156,9 @@ class Repository:
             pkgName = "qtcreator-" + pkgName
 
         if infoType is self.__class__.InfoType.Summary:
-            fmt = "%{{Summary}}"
+            fmt = "%{Summary}"
         if infoType is self.__class__.InfoType.Description:
-            fmt = "%{{Description}}"
+            fmt = "%{Description}"
 
         rpm = subprocess.Popen(["rpm", "-q", "--qf", fmt, pkgName], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if not rpm.wait() == 0:
