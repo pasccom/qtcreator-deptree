@@ -1,0 +1,8 @@
+# OSC cache directory:
+.osc/
+
+# Compiled python files:
+*.pyc
+
+# Package archive:
+*.tar.*
