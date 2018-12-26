@@ -36,7 +36,7 @@ try:
 except ImportError:
     zypp = None
     print("\033[1;33;40mWarning:\033[0m Your system does not have libZypp bindings for Python.")
-    print("Package info will be retrieved only from installed RPM.")
+    print("Package info will be retrieved using zypper or rpm for installed RPMs.")
 
 from deptree import SourceTreeParser
 
@@ -119,12 +119,13 @@ class Repository:
         Description = 2
 
     def __init__(self, alias):
-        self.pool = None
+        self.__zypperOutput = {}
+        self.__pool = None
 
         if zypp is not None:
             factory = zypp.ZYppFactory.instance()
             zypper = factory.getZYpp()
-            self.pool = zypper.pool()
+            self.__pool = zypper.pool()
 
             manager = zypp.RepoManager()
             repo = manager.getRepo(alias)
@@ -141,15 +142,45 @@ class Repository:
             pkgName = "qtcreator-" + pkgName
 
         try:
-            if self.pool is None:
+            if self.__pool is None:
                 raise StopIteration()
-            pkg = self.pool.byNameIterator(pkgName).value()
+            pkg = self.__pool.byNameIterator(pkgName).value()
             if infoType is self.__class__.InfoType.Summary:
                 print(pkg.summary(), file=file)
             if infoType is self.__class__.InfoType.Description:
                 print(pkg.description(), file=file)
         except StopIteration:
             self.printInfoFromRPM(infoType, pkgName, default, file=file)
+
+    def printInfoFromZypper(self, infoType, pkgName, default='# TODO', file=None):
+        if not pkgName.startswith("qtcreator-"):
+            pkgName = "qtcreator-" + pkgName
+
+        if pkgName not in self.__zypperOutput:
+            print('Getting information for "{}" ... '.format(pkgName), end='')
+            sys.stdout.flush()
+            zypperEnv = os.environ.copy()
+            zypperEnv['LC_ALL'] = "C"
+            zypper = subprocess.Popen(["zypper", "info", pkgName], env=zypperEnv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if not zypper.wait() == 0:
+                print('FAIL')
+                return self.printInfoFromRPM(infoType, pkgName, default, file)
+            else:
+                print('DONE')
+                self.__zypperOutput[pkgName] = zypper.stdout.read().decode().split('\n')
+
+        try:
+            if infoType is self.__class__.InfoType.Summary:
+                print([l for l in self.__zypperOutput[pkgName] if l.startswith('Summary')][0][17:].strip(), file=file)
+            if infoType is self.__class__.InfoType.Description:
+                inDesc = False
+                for l in self.__zypperOutput[pkgName]:
+                    if inDesc and (len(l) > 0):
+                        print(l.strip(), file=file)
+                    elif l.startswith('Description'):
+                        inDesc = True
+        except:
+            print(default, file=file)
 
     def printInfoFromRPM(self, infoType, pkgName, default='# TODO', file=None):
         if not pkgName.startswith("qtcreator-"):
@@ -162,7 +193,7 @@ class Repository:
 
         rpm = subprocess.Popen(["rpm", "-q", "--qf", fmt, pkgName], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if not rpm.wait() == 0:
-            print(default, file=file)
+            return self.printInfoFromZypper(infoType, pkgName, default, file)
         else:
             print(rpm.stdout.read().decode().strip(), file=file)
 
