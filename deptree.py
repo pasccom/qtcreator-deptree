@@ -375,6 +375,9 @@ involving library {}.""".format(d.name), file=file)
 
         # Parses _dependencies.pri file:
         dep.parseDepFile(os.path.join(depPath, depName + "_dependencies.pri"))
+        if (len(dep.name) == 0):
+            print("Could not find dependency name for \"{}\"".format(depName))
+            return
         print(dep)
         # Add dependency to list
         assert(depName not in self.deps)
