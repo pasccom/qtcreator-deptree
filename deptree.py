@@ -388,8 +388,16 @@ involving library {}.""".format(d.name), file=file)
 
         @param name The name of the dependency to be added in predecessor list
         """
+        rm = set()
         for d in self.deps[name].deps:
-            self.deps[d].preds.add(name)
+            try:
+                self.deps[d].preds.add(name)
+            except (KeyError) as e:
+                if (e.args[0] == d):
+                    rm.add(d)
+                else:
+                    raise(e)
+        self.deps[name].deps -= rm
 
     def __updateTransitiveClosure(self, dep):
         """ Updates the transitive closure around a dependency
