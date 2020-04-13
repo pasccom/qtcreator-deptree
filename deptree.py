@@ -266,7 +266,7 @@ class SourceTreeParser:
                 print("%{{_libdir}}/qtcreator/plugins/lib{}.so".format(d.name))
 
     def printMetadata(self, outputLibs=True, outputPlugins=True, file=None):
-        for d in self.deps.values():
+        for d in sorted(self.deps.values(), key=lambda d: d.packageName()):
             if self.isOutput(d) and ((outputLibs and (d.type is DependencyType.Lib)) or \
                                      (outputPlugins and (d.type is DependencyType.Plugin))):
                 print("%package {}".format(d.packageName()), file=file)
@@ -285,7 +285,7 @@ class SourceTreeParser:
                 print("", file=file)
 
     def printDevelMetadata(self, outputLibs=True, outputPlugins=True, file=None):
-        for d in self.deps.values():
+        for d in sorted(self.deps.values(), key=lambda d: d.packageName()):
             if d.hasExports and self.isOutput(d) and ((outputLibs and (d.type is DependencyType.Lib)) or \
                                                       (outputPlugins and (d.type is DependencyType.Plugin))):
                 print("%package -n qtcreator-{}-devel".format(d.packageName()), file=file)
@@ -307,7 +307,7 @@ involving library {}.""".format(d.name), file=file)
                 print("", file=file)
 
     def printFiles(self, outputLibs=True, outputPlugins=True, file=None):
-        for d in self.deps.values():
+        for d in sorted(self.deps.values(), key=lambda d: d.packageName()):
             if self.isOutput(d) and ((outputLibs and (d.type is DependencyType.Lib)) or \
                                      (outputPlugins and (d.type is DependencyType.Plugin))):
                 print("%files {}".format(d.packageName()), file=file)
@@ -320,7 +320,7 @@ involving library {}.""".format(d.name), file=file)
                 print("", file=file)
 
     def printDevelFiles(self, outputLibs=True, outputPlugins=True, file=None):
-        for d in self.deps.values():
+        for d in sorted(self.deps.values(), key=lambda d: d.packageName()):
             if d.hasExports and self.isOutput(d) and ((outputLibs and (d.type is DependencyType.Lib)) or \
                                                       (outputPlugins and (d.type is DependencyType.Plugin))):
                 print("%files -n qtcreator-{}-devel".format(d.packageName()), file=file)
