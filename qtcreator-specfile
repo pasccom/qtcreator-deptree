@@ -298,11 +298,12 @@ Copyright (c) 2018 Pascal COMBES <pascom@orange.fr>""",
     # Parse Qt Creator tree
     qtcTree = SourceTreeParser(args.inputPath)
     qtcTree.repo = Repository(args.repository)
-    qtcTree.selected = [d for d in args.enabledDeps.split(',') if len(d) > 0]
-    qtcTree.unselected = [d for d in args.disabledDeps.split(',') if len(d) > 0]
+    qtcTree.selected = [d.lower() for d in args.enabledDeps.split(',') if len(d) > 0]
+    qtcTree.unselected = [d.lower() for d in args.disabledDeps.split(',') if len(d) > 0]
     qtcTree.parse(args.optimize)
 
     # Customizations
+    qtcTree.requires['qtcssh'] = ["qtcreator-askpass = %{version}"]
     qtcTree.requires['qbsprojectmanager'] = ["qtcreator-qbs = %{version}"]
     qtcTree.files['qmldesigner'] = ["%{_libdir}/qtcreator/plugins/qmldesigner"]
     qtcTree.develFiles['utils'] = [
