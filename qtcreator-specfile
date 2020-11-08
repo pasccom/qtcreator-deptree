@@ -309,6 +309,7 @@ Copyright (c) 2018 Pascal COMBES <pascom@orange.fr>""",
     qtcTree.develFiles['utils'] = [
         "%dir %{_includedir}/qtcreator/src/libs/3rdparty",
         "%{_includedir}/qtcreator/src/libs/3rdparty/optional",
+        "%{_includedir}/qtcreator/src/libs/3rdparty/span",
         "%{_includedir}/qtcreator/src/libs/3rdparty/variant"
     ]
     qtcTree.develFiles['cplusplus'] = [
